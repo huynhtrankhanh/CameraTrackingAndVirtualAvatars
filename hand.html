@@ -170,14 +170,13 @@
         // ==========================================
         // 3. REALISTIC FLESHY HAND CONSTRUCTION
         // ==========================================
-        // Skin material simulating subsurface scattering and flesh
         const skinMaterial = new THREE.MeshPhysicalMaterial({
             color: 0xdf997e,
             roughness: 0.35,
             metalness: 0.05,
-            clearcoat: 0.15, // Slight sweat/oil
+            clearcoat: 0.15, 
             clearcoatRoughness: 0.2,
-            transmission: 0.1, // Fake subsurface scattering
+            transmission: 0.1, 
             thickness: 1.0
         });
 
@@ -185,19 +184,17 @@
         const boneGroups = [];
         const palmWebbings = [];
 
-        // Helper to determine anatomical finger radii
         function getRadius(i) {
-            if (i === 0) return 0.8; // Wrist
-            if ([1,2,3].includes(i)) return 0.6; // Thumb
-            if (i === 4) return 0.5; // Thumb tip
-            if ([5,9,13,17].includes(i)) return 0.55; // Knuckles
-            if ([6,10,14,18].includes(i)) return 0.5; // Mid joints
-            if ([7,11,15,19].includes(i)) return 0.45; // Distal joints
-            if ([8,12,16,20].includes(i)) return 0.38; // Finger tips
+            if (i === 0) return 0.8; 
+            if ([1,2,3].includes(i)) return 0.6; 
+            if (i === 4) return 0.5; 
+            if ([5,9,13,17].includes(i)) return 0.55; 
+            if ([6,10,14,18].includes(i)) return 0.5; 
+            if ([7,11,15,19].includes(i)) return 0.45; 
+            if ([8,12,16,20].includes(i)) return 0.38; 
             return 0.5;
         }
 
-        // Create 21 Spherical Joints
         for (let i = 0; i < 21; i++) {
             const r = getRadius(i);
             const jointMesh = new THREE.Mesh(new THREE.SphereGeometry(r, 32, 32), skinMaterial);
@@ -206,35 +203,30 @@
         }
 
         const HAND_CONNECTIONS = [
-            [0, 1], [1, 2], [2, 3], [3, 4], // Thumb
-            [0, 5], [5, 6], [6, 7], [7, 8], // Index
-            [5, 9], [9, 10], [10, 11], [11, 12], // Middle
-            [9, 13], [13, 14], [14, 15], [15, 16], // Ring
-            [13, 17], [17, 18], [18, 19], [19, 20]  // Pinky
+            [0, 1], [1, 2], [2, 3], [3, 4], // Thumb (indices 0-3)
+            [0, 5], [5, 6], [6, 7], [7, 8], // Index (indices 4-7)
+            [5, 9], [9, 10], [10, 11], [11, 12], // Middle (indices 8-11)
+            [9, 13], [13, 14], [14, 15], [15, 16], // Ring (indices 12-15)
+            [13, 17], [17, 18], [18, 19], [19, 20]  // Pinky (indices 16-19)
         ];
 
-        // Creates a seamless cylinder bone between joints
         function createBone(radius) {
-            // Geometry centered, height along Y axis
             const geom = new THREE.CylinderGeometry(radius, radius, 1, 32, 1, true);
             const mesh = new THREE.Mesh(geom, skinMaterial);
-            // Group holds orientation, Mesh handles length scaling
             const group = new THREE.Group();
             group.add(mesh);
             scene.add(group);
             return { group, mesh };
         }
 
-        // Create Phalanxes (Bones)
         HAND_CONNECTIONS.forEach(conn => {
             const avgRadius = (getRadius(conn[0]) + getRadius(conn[1])) / 2;
             boneGroups.push(createBone(avgRadius));
         });
 
-        // Create Palm Filler Webbing to make it look solid
         const PALM_CONNECTIONS = [[0,9], [0,13], [5,9], [9,13], [13,17]];
         PALM_CONNECTIONS.forEach(() => {
-            palmWebbings.push(createBone(0.5)); // Thick fillers
+            palmWebbings.push(createBone(0.5)); 
         });
 
         // ==========================================
@@ -260,7 +252,6 @@
             });
         }
 
-        // The exact connection indices mapping to the distal (tip) bones
         const stickersConfig = {
             3: '🐶',  // Thumb tip bone
             7: '🦁',  // Index tip bone
@@ -272,18 +263,16 @@
         const stickerSize = 1.3;
         const stickerGeom = new THREE.PlaneGeometry(stickerSize, stickerSize);
 
-        for (const [boneIndex, emoji] of Object.entries(stickersConfig)) {
+        for (const [boneIndexStr, emoji] of Object.entries(stickersConfig)) {
+            const bIdx = parseInt(boneIndexStr);
             const mat = createStickerMaterial(emoji);
             const stickerMesh = new THREE.Mesh(stickerGeom, mat);
             
-            const targetBone = boneGroups[boneIndex];
-            const boneRadius = (getRadius(HAND_CONNECTIONS[boneIndex][0]) + getRadius(HAND_CONNECTIONS[boneIndex][1])) / 2;
+            const targetBone = boneGroups[bIdx];
+            const boneRadius = (getRadius(HAND_CONNECTIONS[bIdx][0]) + getRadius(HAND_CONNECTIONS[bIdx][1])) / 2;
             
             // Offset sticker exactly to the surface on the +Z axis (Ventral face)
             stickerMesh.position.set(0, 0, boneRadius + 0.05);
-            
-            // Attach sticker to the unscaled bone group so it rotates perfectly
-            // but doesn't stretch when the finger bends/lengthens
             targetBone.group.add(stickerMesh);
         }
 
@@ -330,7 +319,7 @@
             // 1. Position Joints
             landmarks.forEach((lm, index) => {
                 const x = -(lm.x - 0.5) * SCALE;
-                const y = -(lm.y - 0.5) * SCALE * (overlayCanvas.height / overlayCanvas.width); // Aspect ratio correction
+                const y = -(lm.y - 0.5) * SCALE * (overlayCanvas.height / overlayCanvas.width); 
                 const z = -lm.z * SCALE;
                 joints[index].mesh.position.set(x, y, z);
             });
@@ -343,50 +332,34 @@
             const v1 = new THREE.Vector3().subVectors(p5, p0);
             const v2 = new THREE.Vector3().subVectors(p17, p0);
             
-            // Cross product gives us the perpendicular normal of the palm
             let palmNormal = new THREE.Vector3().crossVectors(v1, v2).normalize();
             
-            // Adjust normal based on handedness due to mirroring effect
-            // We want Z to always point Ventral (towards the palm surface)
             if (handednessStr === 'Left') {
                 palmNormal.negate();
             }
 
-            // 3. Update Bones & Stickers (Aligning locally to the Ventral normal)
+            // 3. Update Bones & Stickers
             const updateBoneSegment = (startMesh, endMesh, boneData) => {
                 const start = startMesh.position;
                 const end = endMesh.position;
                 const center = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
                 const length = start.distanceTo(end);
 
-                // Y-Axis: Direction of the bone
                 const dirY = new THREE.Vector3().subVectors(end, start).normalize();
-                
-                // Z-Axis: Ventral (palm-facing)
                 const dirZ = palmNormal.clone();
-                
-                // X-Axis: Orthogonal to both
                 const dirX = new THREE.Vector3().crossVectors(dirY, dirZ).normalize();
-                
-                // Re-orthogonalize Z to guarantee perfect 90 degree matrix
                 dirZ.crossVectors(dirX, dirY).normalize();
 
-                // Apply rotation
                 const matrix = new THREE.Matrix4().makeBasis(dirX, dirY, dirZ);
                 boneData.group.position.copy(center);
                 boneData.group.quaternion.setFromRotationMatrix(matrix);
-                
-                // Stretch only the inner cylinder mesh, leaving the group scale untouched 
-                // so child stickers remain perfectly square and un-distorted.
                 boneData.mesh.scale.set(1, length, 1);
             };
 
-            // Update main fingers
             HAND_CONNECTIONS.forEach((conn, index) => {
                 updateBoneSegment(joints[conn[0]].mesh, joints[conn[1]].mesh, boneGroups[index]);
             });
 
-            // Update palm webbing
             PALM_CONNECTIONS.forEach((conn, index) => {
                 updateBoneSegment(joints[conn[0]].mesh, joints[conn[1]].mesh, palmWebbings[index]);
             });
@@ -434,7 +407,9 @@
                 if (results.landmarks && results.landmarks.length > 0) {
                     setVisibility(true);
                     const landmarks = results.landmarks[0];
-                    const handedness = results.handedness[0][0].categoryName; 
+                    
+                    // THE FIX: "handednesses" is plural, and we add safe fallbacks just in case
+                    const handedness = results.handednesses?.[0]?.[0]?.categoryName || 'Left'; 
                     
                     update3DHand(landmarks, handedness);
                     draw2DSkeleton(landmarks);
