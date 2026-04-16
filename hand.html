@@ -163,6 +163,7 @@
             color: 0xdf997e,
             roughness: 0.35,
             metalness: 0.1,
+            side: THREE.DoubleSide // Important for our custom palm mesh to render correctly
         });
 
         const joints = [];
@@ -191,7 +192,6 @@
 
         // Tapered Cylinder generator to connect joints seamlessly
         function createBone(radiusEnd, radiusStart) {
-            // Origin centered at the BOTTOM so it pivots perfectly from the start joint
             const geom = new THREE.CylinderGeometry(radiusEnd, radiusStart, 1, 32);
             geom.translate(0, 0.5, 0); 
             const mesh = new THREE.Mesh(geom, skinMaterial);
@@ -212,11 +212,17 @@
             bones.push(createBone(getRadius(conn[1]), getRadius(conn[0])));
         });
 
-        // Create Solid Palm filler connections
+        // Create Palm filler edges (creates a nice rounded bevel for the solid palm)
         const PALM_CONNECTIONS = [[0,9], [0,13], [1,5], [5,9], [9,13], [13,17]];
         PALM_CONNECTIONS.forEach(conn => {
             palmWebbings.push(createBone(getRadius(conn[1]), getRadius(conn[0])));
         });
+
+        // == NEW: SOLID DYNAMIC PALM MESH ==
+        const solidPalmGeom = new THREE.BufferGeometry();
+        const solidPalmMesh = new THREE.Mesh(solidPalmGeom, skinMaterial);
+        scene.add(solidPalmMesh);
+
 
         // ==========================================
         // 4. VENTRAL STICKERS
@@ -303,18 +309,29 @@
                 joints[index].position.set(x, y, z);
             });
 
-            // 2. Position and Scale Tapered Bones (Guaranteed no detachment)
+            // 2. Calculate Palm Normal (Which way is the palm facing?)
+            const pos0 = joints[0].position;
+            const pos5 = joints[5].position;
+            const pos17 = joints[17].position;
+            
+            const v1 = new THREE.Vector3().subVectors(pos5, pos0);
+            const v2 = new THREE.Vector3().subVectors(pos17, pos0);
+            let palmNormal = new THREE.Vector3().crossVectors(v1, v2).normalize();
+            
+            if (handednessStr === 'Left') {
+                palmNormal.negate();
+            }
+
+            // 3. Position and Scale Tapered Bones
             const alignBone = (startJoint, endJoint, boneMesh) => {
                 const start = startJoint.position;
                 const end = endJoint.position;
                 const distance = start.distanceTo(end);
                 
-                boneMesh.position.copy(start); // Anchor to start
+                boneMesh.position.copy(start);
                 const dir = new THREE.Vector3().subVectors(end, start).normalize();
-                
-                // Perfectly orient Y-axis to point at the next joint
                 boneMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
-                boneMesh.scale.set(1, distance, 1); // Stretch to reach
+                boneMesh.scale.set(1, distance, 1);
             };
 
             HAND_CONNECTIONS.forEach((conn, index) => {
@@ -325,30 +342,62 @@
                 alignBone(joints[conn[0]], joints[conn[1]], palmWebbings[index]);
             });
 
-            // 3. Orient Stickers perfectly to the Ventral (Palm) Surface
-            const pos0 = joints[0].position;
-            const pos5 = joints[5].position;
-            const pos17 = joints[17].position;
+            // ========================================================
+            // 4. NEW: BUILD THE SOLID PALM FILLER DYNAMICALLY
+            // ========================================================
+            // Grab the perimeter joints defining the palm shape
+            const palmPts = [0, 1, 2, 5, 9, 13, 17].map(i => joints[i].position);
+            const thickness = 0.5; // Fleshy thickness of the center palm
+            const offset = palmNormal.clone().multiplyScalar(thickness / 2);
             
-            // Calculate which way the palm is facing
-            const v1 = new THREE.Vector3().subVectors(pos5, pos0);
-            const v2 = new THREE.Vector3().subVectors(pos17, pos0);
-            let palmNormal = new THREE.Vector3().crossVectors(v1, v2).normalize();
+            const palmVertices = [];
             
-            // Adjust for left/right hand mirroring
-            if (handednessStr === 'Left') {
-                palmNormal.negate();
+            // Build Ventral (Top) Layer
+            palmPts.forEach(p => palmVertices.push(p.x + offset.x, p.y + offset.y, p.z + offset.z));
+            // Build Dorsal (Bottom) Layer
+            palmPts.forEach(p => palmVertices.push(p.x - offset.x, p.y - offset.y, p.z - offset.z));
+
+            // Map triangles across our 7 joint points
+            const baseFaces = [
+                0, 3, 1,  // Wrist to Index to ThumbBase
+                1, 3, 2,  // ThumbBase to Index to ThumbMid
+                0, 4, 3,  // Wrist to Middle to Index
+                0, 5, 4,  // Wrist to Ring to Middle
+                0, 6, 5   // Wrist to Pinky to Ring
+            ];
+            
+            // Ensure normals face outward correctly based on which hand is on screen
+            let palmIndices = [];
+            const ventralFaces = handednessStr === 'Right' 
+                ? baseFaces 
+                : (() => {
+                    let reversed = [];
+                    for(let i=0; i<baseFaces.length; i+=3) reversed.push(baseFaces[i], baseFaces[i+2], baseFaces[i+1]);
+                    return reversed;
+                })();
+                
+            // The dorsal (back) faces use the bottom layer points (+7 offset) and reversed winding
+            const dorsalFaces = [];
+            for(let i=0; i<ventralFaces.length; i+=3) {
+                dorsalFaces.push(ventralFaces[i] + 7, ventralFaces[i+2] + 7, ventralFaces[i+1] + 7);
             }
 
+            palmIndices = [...ventralFaces, ...dorsalFaces];
+
+            // Apply solid shape to the Mesh
+            solidPalmGeom.setAttribute('position', new THREE.Float32BufferAttribute(palmVertices, 3));
+            solidPalmGeom.setIndex(palmIndices);
+            solidPalmGeom.computeVertexNormals(); // Make lighting hit it beautifully
+            // ========================================================
+
+
+            // 5. Orient Stickers perfectly to the Ventral (Palm) Surface
             for (const [indexStr, sticker] of Object.entries(stickerMeshes)) {
                 const i = parseInt(indexStr);
                 const tipPos = joints[i].position;
-                const prevPos = joints[i - 1].position; // The joint right below the tip
+                const prevPos = joints[i - 1].position;
 
-                // Up direction is the direction the finger is pointing
                 const dirY = new THREE.Vector3().subVectors(tipPos, prevPos).normalize();
-                
-                // Calculate orthographic orientation matrix
                 const dirZ = palmNormal.clone(); 
                 const dirX = new THREE.Vector3().crossVectors(dirY, dirZ).normalize();
                 dirZ.crossVectors(dirX, dirY).normalize();
@@ -356,7 +405,6 @@
                 const matrix = new THREE.Matrix4().makeBasis(dirX, dirY, dirZ);
                 sticker.quaternion.setFromRotationMatrix(matrix);
 
-                // Offset the sticker so it sits ON top of the skin, not inside the bone
                 const fingerRadius = getRadius(i);
                 sticker.position.copy(tipPos);
                 sticker.position.add(dirZ.multiplyScalar(fingerRadius + 0.1));
@@ -392,9 +440,10 @@
         function setVisibility(visible) {
             scene.children.forEach(child => {
                 if (child.type === 'Mesh' && child.geometry.type !== 'PlaneGeometry') {
-                    child.visible = visible; // Toggle hand visibility
+                    child.visible = visible;
                 }
             });
+            solidPalmMesh.visible = visible; // Ensure solid palm vanishes when hand is lost
             Object.values(stickerMeshes).forEach(s => s.visible = visible);
         }
 
