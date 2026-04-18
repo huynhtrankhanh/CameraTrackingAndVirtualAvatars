@@ -251,10 +251,9 @@
     <script>
         // --- 1. SVG Avatar Logic & Lerp Smoothing ---
         const headEl = document.getElementById('head');
-        const pawLEl = document.getElementById('paw-l'); // Screen Left Paw
-        const pawREl = document.getElementById('paw-r'); // Screen Right Paw
+        const pawLEl = document.getElementById('paw-l'); 
+        const pawREl = document.getElementById('paw-r'); 
 
-        // We use Linear Interpolation (Lerp) to smooth the jittery webcam landmarks
         const lerp = (start, end, amt) => (1 - amt) * start + amt * end;
 
         const state = {
@@ -263,14 +262,16 @@
             pawR: { x: 300, y: 300, angle: 0, targetX: 300, targetY: 300, targetAngle: 0, visible: true }
         };
 
-        const lerpAmt = 0.2; // Adjust for more/less smoothing
+        const lerpAmt = 0.2; 
 
         function animateSVG() {
             // Lerp Head
             state.head.x = lerp(state.head.x, state.head.targetX, lerpAmt);
             state.head.y = lerp(state.head.y, state.head.targetY, lerpAmt);
             state.head.angle = lerp(state.head.angle, state.head.targetAngle, lerpAmt);
-            headEl.setAttribute('transform', `translate(${state.head.x}, ${state.head.y - 100}) rotate(${state.head.angle})`);
+            
+            // FIX: Removed the massive "- 100" Y offset so the head overlaps the neck properly
+            headEl.setAttribute('transform', `translate(${state.head.x}, ${state.head.y - 20}) rotate(${state.head.angle})`);
 
             // Lerp Paws
             ['pawL', 'pawR'].forEach(paw => {
@@ -280,12 +281,12 @@
                 p.angle = lerp(p.angle, p.targetAngle, lerpAmt);
                 const el = paw === 'pawL' ? pawLEl : pawREl;
                 el.setAttribute('transform', `translate(${p.x}, ${p.y}) rotate(${p.angle})`);
-                el.style.opacity = p.visible ? 1 : 0.2; // Fade out if hand is lost
+                el.style.opacity = p.visible ? 1 : 0.2; 
             });
 
             requestAnimationFrame(animateSVG);
         }
-        animateSVG(); // Start render loop
+        animateSVG(); 
 
         // --- 2. MediaPipe Holistic Integration ---
         const videoElement = document.getElementById('input-video');
@@ -296,14 +297,12 @@
         let isInitialized = false;
 
         function onResults(results) {
-            // Hide loading screen on first successful frame
             if (!isInitialized) {
                 loadingScreen.style.opacity = '0';
                 setTimeout(() => loadingScreen.style.display = 'none', 500);
                 isInitialized = true;
             }
 
-            // A. Draw Debug Skeletons on PIP Canvas
             canvasElement.width = videoElement.videoWidth;
             canvasElement.height = videoElement.videoHeight;
             canvasCtx.save();
@@ -313,24 +312,21 @@
             if (results.faceLandmarks) {
                 drawConnectors(canvasCtx, results.faceLandmarks, FACEMESH_TESSELATION, {color: '#C0C0C070', lineWidth: 1});
                 
-                // Map Face to Tiger Head
-                // Center of face is roughly landmark 1 (nose tip)
                 const nose = results.faceLandmarks[1];
                 const leftEye = results.faceLandmarks[33];
                 const rightEye = results.faceLandmarks[263];
 
-                // Note: The camera image is mirrored via CSS. MediaPipe X coordinates are unmirrored [0 to 1].
-                // We invert the X mapping so that physical left moves to screen right.
-                state.head.targetX = (0.5 - nose.x) * 1000; 
-                state.head.targetY = (nose.y - 0.5) * 800;
+                // FIX: Drastically reduced the multiplier to constrain translation to the neck area
+                state.head.targetX = (0.5 - nose.x) * 150; 
+                state.head.targetY = (nose.y - 0.5) * 150;
 
-                // Calculate head tilt angle
-                const dx = (0.5 - rightEye.x) - (0.5 - leftEye.x);
+                // FIX: Corrected the dx/dy calculation for mirrored camera
+                const dx = leftEye.x - rightEye.x; 
                 const dy = rightEye.y - leftEye.y;
                 state.head.targetAngle = Math.atan2(dy, dx) * (180 / Math.PI);
             }
 
-            // Draw & Map Right Hand (Controls Left Screen Paw)
+            // Draw & Map Right Hand
             if (results.rightHandLandmarks) {
                 drawConnectors(canvasCtx, results.rightHandLandmarks, HAND_CONNECTIONS, {color: '#00FF00', lineWidth: 2});
                 drawLandmarks(canvasCtx, results.rightHandLandmarks, {color: '#FF0000', lineWidth: 1, radius: 2});
@@ -339,18 +335,18 @@
                 const middleFinger = results.rightHandLandmarks[9];
 
                 state.pawL.visible = true;
-                state.pawL.targetX = (0.5 - wrist.x) * 1400 - 250; // Offset outwards
-                state.pawL.targetY = (wrist.y - 0.5) * 1200 + 200; // Offset downwards
+                state.pawL.targetX = (0.5 - wrist.x) * 1400 - 250; 
+                state.pawL.targetY = (wrist.y - 0.5) * 1200 + 200; 
                 
                 const dx = (0.5 - middleFinger.x) - (0.5 - wrist.x);
                 const dy = middleFinger.y - wrist.y;
-                state.pawL.targetAngle = (Math.atan2(dy, dx) * (180 / Math.PI)) + 90; // Default paw orientation adjustment
+                state.pawL.targetAngle = (Math.atan2(dy, dx) * (180 / Math.PI)) + 90; 
             } else {
                 state.pawL.visible = false;
-                state.pawL.targetY = 400; // Drop paw down when lost
+                state.pawL.targetY = 400; 
             }
 
-            // Draw & Map Left Hand (Controls Right Screen Paw)
+            // Draw & Map Left Hand
             if (results.leftHandLandmarks) {
                 drawConnectors(canvasCtx, results.leftHandLandmarks, HAND_CONNECTIONS, {color: '#00FF00', lineWidth: 2});
                 drawLandmarks(canvasCtx, results.leftHandLandmarks, {color: '#FF0000', lineWidth: 1, radius: 2});
@@ -395,7 +391,7 @@
             },
             width: 480,
             height: 360,
-            facingMode: 'user' // Front-facing camera
+            facingMode: 'user'
         });
         camera.start();
 
@@ -413,7 +409,6 @@
             initialLeft = rect.left;
             initialTop = rect.top;
 
-            // Lock pointer to elements and disable CSS transitions during drag
             pip.setPointerCapture(e.pointerId);
             pip.style.bottom = 'auto';
             pip.style.right = 'auto';
@@ -424,12 +419,11 @@
 
         pip.addEventListener('pointermove', (e) => {
             if (!isDragging) return;
-            e.preventDefault(); // Prevent touch scrolling
+            e.preventDefault(); 
 
             const dx = e.clientX - startX;
             const dy = e.clientY - startY;
 
-            // Keep within bounds roughly
             const newLeft = Math.max(0, Math.min(window.innerWidth - pip.offsetWidth, initialLeft + dx));
             const newTop = Math.max(0, Math.min(window.innerHeight - pip.offsetHeight, initialTop + dy));
 
