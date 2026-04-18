@@ -2,309 +2,317 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Multiplayer Hand Tracking Ping Pong</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Hand Tracking Ping Pong</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
     <style>
-        body {
+        body, html {
             margin: 0;
-            overflow: hidden;
-            background-color: #111;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            color: white;
-        }
-        #ui-container {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            z-index: 100;
-            background: rgba(0, 0, 0, 0.6);
-            padding: 15px;
-            border-radius: 10px;
-            backdrop-filter: blur(5px);
-        }
-        select, button {
-            background: #333;
-            color: #fff;
-            border: 1px solid #555;
-            padding: 8px 12px;
-            border-radius: 5px;
-            font-size: 14px;
-            margin-top: 5px;
+            padding: 0;
             width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: black;
+            font-family: sans-serif;
+            touch-action: none; /* Prevent mobile scroll */
         }
-        select:focus { outline: none; border-color: #00ff88; }
-        .instructions {
-            font-size: 12px;
-            color: #aaa;
-            margin-top: 10px;
-            max-width: 200px;
+
+        #gameCanvas {
+            display: block;
+            width: 100%;
+            height: 100%;
         }
+
+        /* Draggable Camera Container */
+        #cameraContainer {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 240px;
+            height: 180px;
+            background: #222;
+            border: 2px solid #fff;
+            border-radius: 8px;
+            cursor: grab;
+            z-index: 100;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #cameraContainer:active {
+            cursor: grabbing;
+        }
+
+        /* Mirror the feed for a natural selfie-view */
+        #debugCanvas {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            transform: scaleX(-1);
+            pointer-events: none; /* Let drag events pass to container */
+        }
+
+        #videoElement {
+            display: none; /* Hide raw video; we draw directly to canvas */
+        }
+
         #loading {
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            font-size: 24px;
-            font-weight: bold;
-            color: #00ff88;
-            z-index: 200;
+            color: white;
+            font-size: 20px;
+            z-index: 10;
             pointer-events: none;
+            text-align: center;
         }
-        video { display: none; }
     </style>
-
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-            }
-        }
-    </script>
 </head>
 <body>
 
-    <div id="loading">Loading AI Models...</div>
+    <div id="loading">Initializing Camera & Hand Tracking...<br><small>Please allow camera access</small></div>
+    
+    <canvas id="gameCanvas"></canvas>
 
-    <div id="ui-container">
-        <label for="cameraSelect"><strong>Select Camera</strong></label>
-        <select id="cameraSelect"></select>
-        <div class="instructions">
-            <strong>How to play:</strong><br>
-            Player 1: Left hand in view (moves left paddle).<br>
-            Player 2: Right hand in view (moves right paddle).<br>
-            Move hands <strong>UP and DOWN</strong> to control paddles.
-        </div>
+    <div id="cameraContainer">
+        <video id="videoElement" playsinline></video>
+        <canvas id="debugCanvas" width="240" height="180"></canvas>
     </div>
 
-    <video id="webcam" autoplay playsinline></video>
-
-    <script type="module">
-        import * as THREE from 'three';
-        import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3";
-
-        // --- 1. THREE.JS SETUP ---
-        const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x1a1a2e);
-
-        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.set(0, 12, 10);
-        camera.lookAt(0, 0, 0);
-
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        document.body.appendChild(renderer.domElement);
-
-        // Lighting
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-        scene.add(ambientLight);
-        const dirLight = new THREE.DirectionalLight(0xffffff, 1);
-        dirLight.position.set(0, 10, 5);
-        scene.add(dirLight);
-
-        // Game Table
-        const tableGeo = new THREE.BoxGeometry(20, 0.5, 12);
-        const tableMat = new THREE.MeshPhongMaterial({ color: 0x0f3460 });
-        const table = new THREE.Mesh(tableGeo, tableMat);
-        table.position.y = -0.25;
-        scene.add(table);
-
-        // Center Line
-        const lineGeo = new THREE.PlaneGeometry(0.2, 12);
-        const lineMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-        const line = new THREE.Mesh(lineGeo, lineMat);
-        line.rotation.x = -Math.PI / 2;
-        line.position.y = 0.01;
-        scene.add(line);
-
-        // Paddles
-        const paddleGeo = new THREE.BoxGeometry(0.5, 1, 2.5);
-        const p1Mat = new THREE.MeshPhongMaterial({ color: 0xe94560 }); // Left Player (Red)
-        const p2Mat = new THREE.MeshPhongMaterial({ color: 0x00ff88 }); // Right Player (Green)
+    <script>
+        // --- 1. GAME SETUP & RESIZING ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
         
-        const paddle1 = new THREE.Mesh(paddleGeo, p1Mat);
-        paddle1.position.set(-9, 0.5, 0);
-        scene.add(paddle1);
+        let W, H;
+        let paddleW, paddleH;
+        let p1Y, p2Y, targetP1Y, targetP2Y;
+        let ball = { x: 0, y: 0, vx: 0, vy: 0, r: 0 };
 
-        const paddle2 = new THREE.Mesh(paddleGeo, p2Mat);
-        paddle2.position.set(9, 0.5, 0);
-        scene.add(paddle2);
-
-        // Ball
-        const ballGeo = new THREE.SphereGeometry(0.4, 32, 32);
-        const ballMat = new THREE.MeshPhongMaterial({ color: 0xffffff });
-        const ball = new THREE.Mesh(ballGeo, ballMat);
-        ball.position.set(0, 0.4, 0);
-        scene.add(ball);
-
-        // Game State
-        let ballVX = 0.15;
-        let ballVZ = 0.1;
-        const PADDLE_LIMIT = 4.5; // Constraints for Z axis
-
-        // Handle Window Resize
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
-
-        // --- 2. CAMERA SETUP ---
-        const video = document.getElementById('webcam');
-        const cameraSelect = document.getElementById('cameraSelect');
-
-        async function initCameraSystem() {
-            try {
-                // Request initial access to get device labels
-                await navigator.mediaDevices.getUserMedia({ video: true });
-                const devices = await navigator.mediaDevices.enumerateDevices();
-                const videoDevices = devices.filter(d => d.kind === 'videoinput');
-                
-                videoDevices.forEach((device, index) => {
-                    const option = document.createElement('option');
-                    option.value = device.deviceId;
-                    option.text = device.label || `Camera ${index + 1}`;
-                    cameraSelect.appendChild(option);
-                });
-
-                cameraSelect.addEventListener('change', () => {
-                    startStream(cameraSelect.value);
-                });
-
-                if (videoDevices.length > 0) {
-                    await startStream(videoDevices[0].deviceId);
-                }
-            } catch (err) {
-                console.error("Camera access denied or error:", err);
-                document.getElementById('loading').innerText = "Camera Access Denied";
-            }
+        function resizeCanvas() {
+            W = canvas.width = window.innerWidth;
+            H = canvas.height = window.innerHeight;
+            
+            // Dynamic sizing based on screen size
+            paddleW = Math.max(10, W * 0.015);
+            paddleH = Math.max(60, H * 0.2);
+            ball.r = Math.max(5, W * 0.01);
+            
+            p1Y = p2Y = targetP1Y = targetP2Y = H / 2 - paddleH / 2;
+            resetBall();
         }
 
-        async function startStream(deviceId) {
-            if (video.srcObject) {
-                video.srcObject.getTracks().forEach(track => track.stop());
-            }
-            const constraints = {
-                video: deviceId ? { deviceId: { exact: deviceId } } : { facingMode: 'user' }
-            };
-            const stream = await navigator.mediaDevices.getUserMedia(constraints);
-            video.srcObject = stream;
+        function resetBall() {
+            ball.x = W / 2;
+            ball.y = H / 2;
+            // Velocity scales with screen width
+            ball.vx = (Math.random() > 0.5 ? 1 : -1) * (W * 0.005 + 3); 
+            ball.vy = (Math.random() * 2 - 1) * (H * 0.005 + 3);
         }
 
-        // --- 3. MEDIAPIPE HAND TRACKING SETUP ---
-        let handLandmarker;
-        let lastVideoTime = -1;
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
 
-        async function initMediaPipe() {
-            const vision = await FilesetResolver.forVisionTasks(
-                "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm"
-            );
-            handLandmarker = await HandLandmarker.createFromOptions(vision, {
-                baseOptions: {
-                    modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
-                    delegate: "GPU"
-                },
-                runningMode: "VIDEO",
-                numHands: 2 // Allow up to 2 hands for multiplayer
-            });
+        // --- 2. GAME LOGIC & DRAWING ---
+        function updateGame() {
+            // Smoothly move paddles toward target positions (Lerp)
+            p1Y += (targetP1Y - p1Y) * 0.15;
+            p2Y += (targetP2Y - p2Y) * 0.15;
 
-            document.getElementById('loading').style.display = 'none';
-            animate(); // Start game loop once AI is loaded
-        }
+            // Clamp paddles within screen bounds
+            p1Y = Math.max(0, Math.min(H - paddleH, p1Y));
+            p2Y = Math.max(0, Math.min(H - paddleH, p2Y));
 
-        // --- 4. MAIN GAME LOOP ---
-        function animate() {
-            requestAnimationFrame(animate);
+            // Move ball
+            ball.x += ball.vx;
+            ball.y += ball.vy;
 
-            // 4a. Process Hand Tracking
-            if (handLandmarker && video.readyState >= 2) {
-                const currentTimeInMs = performance.now();
-                if (video.currentTime !== lastVideoTime) {
-                    lastVideoTime = video.currentTime;
-                    const results = handLandmarker.detectForVideo(video, currentTimeInMs);
-                    
-                    if (results.landmarks) {
-                        const hands = results.landmarks;
-                        
-                        if (hands.length >= 2) {
-                            // Sort hands by X axis to consistently assign Left and Right players
-                            const sortedHands = [hands[0], hands[1]].sort((a, b) => a[8].x - b[8].x);
-                            
-                            // Map Y movement of hands to Z axis of paddles
-                            // Player 1 (Left hand in camera frame)
-                            let p1Z = (sortedHands[0][8].y - 0.5) * 16;
-                            paddle1.position.z = Math.max(Math.min(p1Z, PADDLE_LIMIT), -PADDLE_LIMIT);
+            // Top/Bottom Wall Bounce
+            if (ball.y - ball.r < 0) { ball.y = ball.r; ball.vy *= -1; }
+            if (ball.y + ball.r > H) { ball.y = H - ball.r; ball.vy *= -1; }
 
-                            // Player 2 (Right hand in camera frame)
-                            let p2Z = (sortedHands[1][8].y - 0.5) * 16;
-                            paddle2.position.z = Math.max(Math.min(p2Z, PADDLE_LIMIT), -PADDLE_LIMIT);
-                            
-                        } else if (hands.length === 1) {
-                            // Single hand mode (fallback if only 1 hand detected)
-                            // Determine which side of the screen the hand is on
-                            let zPos = (hands[0][8].y - 0.5) * 16;
-                            zPos = Math.max(Math.min(zPos, PADDLE_LIMIT), -PADDLE_LIMIT);
-
-                            if (hands[0][8].x < 0.5) {
-                                paddle1.position.z = zPos;
-                            } else {
-                                paddle2.position.z = zPos;
-                            }
-                        }
-                    }
-                }
+            // Player 1 (Left) Paddle Collision
+            let p1X = W * 0.05;
+            if (ball.x - ball.r < p1X + paddleW && ball.x + ball.r > p1X && ball.y > p1Y && ball.y < p1Y + paddleH) {
+                ball.x = p1X + paddleW + ball.r; // Push out to prevent clipping
+                ball.vx *= -1.05; // Speed up slightly
+                ball.vy += (ball.y - (p1Y + paddleH / 2)) * 0.05; // Apply spin based on hit location
             }
 
-            // 4b. Game Physics (Ball Movement & Collisions)
-            ball.position.x += ballVX;
-            ball.position.z += ballVZ;
-
-            // Bounce off top/bottom walls (Z limits)
-            if (ball.position.z >= 5.6 || ball.position.z <= -5.6) {
-                ballVZ *= -1;
-            }
-
-            // Paddle Collisions
-            const paddleZReach = 1.6; // Halves of paddle depth + ball radius + tolerance
-
-            // Left Paddle (Player 1)
-            if (ball.position.x <= -8.5 && ball.position.x >= -9.5) {
-                if (Math.abs(ball.position.z - paddle1.position.z) < paddleZReach) {
-                    ballVX = Math.abs(ballVX) * 1.05; // Bounce back and speed up slightly
-                    ball.position.x = -8.5;
-                    // Add slight spin/deflection based on hit position
-                    ballVZ += (ball.position.z - paddle1.position.z) * 0.05;
-                }
-            }
-
-            // Right Paddle (Player 2)
-            if (ball.position.x >= 8.5 && ball.position.x <= 9.5) {
-                if (Math.abs(ball.position.z - paddle2.position.z) < paddleZReach) {
-                    ballVX = -Math.abs(ballVX) * 1.05;
-                    ball.position.x = 8.5;
-                    ballVZ += (ball.position.z - paddle2.position.z) * 0.05;
-                }
+            // Player 2 (Right) Paddle Collision
+            let p2X = W * 0.95 - paddleW;
+            if (ball.x + ball.r > p2X && ball.x - ball.r < p2X + paddleW && ball.y > p2Y && ball.y < p2Y + paddleH) {
+                ball.x = p2X - ball.r; // Push out
+                ball.vx *= -1.05;
+                ball.vy += (ball.y - (p2Y + paddleH / 2)) * 0.05;
             }
 
             // Score / Out of bounds
-            if (ball.position.x > 11 || ball.position.x < -11) {
-                // Reset ball
-                ball.position.set(0, 0.4, 0);
-                ballVX = 0.15 * (Math.random() > 0.5 ? 1 : -1);
-                ballVZ = (Math.random() - 0.5) * 0.2;
-            }
-
-            // Cap max speeds
-            ballVX = Math.max(Math.min(ballVX, 0.4), -0.4);
-            ballVZ = Math.max(Math.min(ballVZ, 0.3), -0.3);
-
-            renderer.render(scene, camera);
+            if (ball.x < 0 || ball.x > W) resetBall();
         }
 
-        // Initialize Systems
-        initCameraSystem().then(() => {
-            initMediaPipe();
+        function drawGame() {
+            // Background
+            ctx.fillStyle = 'black';
+            ctx.fillRect(0, 0, W, H);
+
+            ctx.fillStyle = 'white';
+
+            // Draw Paddles
+            ctx.fillRect(W * 0.05, p1Y, paddleW, paddleH);
+            ctx.fillRect(W * 0.95 - paddleW, p2Y, paddleW, paddleH);
+
+            // Draw Center Dashed Line
+            ctx.setLineDash([15, 15]);
+            ctx.beginPath();
+            ctx.moveTo(W / 2, 0);
+            ctx.lineTo(W / 2, H);
+            ctx.strokeStyle = '#444';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.setLineDash([]); // Reset
+
+            // Draw Ball
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function gameLoop() {
+            updateGame();
+            drawGame();
+            requestAnimationFrame(gameLoop);
+        }
+        gameLoop(); // Start Game Loop
+
+        // --- 3. HAND POSTURE CALCULATION ---
+        function getDistance(p1, p2) {
+            return Math.hypot(p1.x - p2.x, p1.y - p2.y);
+        }
+
+        function calculateFoldExtent(landmarks) {
+            const wrist = landmarks[0];
+            const palmBase = landmarks[9]; // Base of middle finger
+            const palmLength = getDistance(wrist, palmBase);
+
+            // Fingertips (Index, Middle, Ring, Pinky)
+            const tips = [8, 12, 16, 20];
+            let avgTipDistance = 0;
+            
+            tips.forEach(tip => {
+                avgTipDistance += getDistance(wrist, landmarks[tip]);
+            });
+            avgTipDistance /= tips.length;
+
+            // Ratio: (Distance to fingertips) / (Palm length)
+            // Fist ~ 0.8, Fully Extended ~ 2.2
+            return avgTipDistance / palmLength;
+        }
+
+        // --- 4. MEDIAPIPE INTEGRATION ---
+        const videoElement = document.getElementById('videoElement');
+        const debugCanvas = document.getElementById('debugCanvas');
+        const debugCtx = debugCanvas.getContext('2d');
+
+        function onResults(results) {
+            // Hide loading text on first frame
+            document.getElementById('loading').style.display = 'none';
+
+            // Draw camera feed to debug canvas
+            debugCtx.save();
+            debugCtx.clearRect(0, 0, debugCanvas.width, debugCanvas.height);
+            debugCtx.drawImage(results.image, 0, 0, debugCanvas.width, debugCanvas.height);
+
+            if (results.multiHandLandmarks) {
+                for (const landmarks of results.multiHandLandmarks) {
+                    // Draw Skeleton
+                    drawConnectors(debugCtx, landmarks, HAND_CONNECTIONS, {color: '#00FF00', lineWidth: 2});
+                    drawLandmarks(debugCtx, landmarks, {color: '#FF0000', lineWidth: 1, radius: 2});
+
+                    // Calculate fold and map to paddle Y position
+                    let foldRatio = calculateFoldExtent(landmarks);
+                    let clampedRatio = Math.max(0.8, Math.min(2.2, foldRatio));
+                    
+                    // Map [0.8 (Folded), 2.2 (Extended)] -> [Canvas Bottom, Canvas Top]
+                    // We invert the map because 0 is Top and H is Bottom in Canvas
+                    let mappedY = (1 - ((clampedRatio - 0.8) / 1.4)) * (H - paddleH);
+
+                    // Determine Left or Right Hand (Unmirrored feed: x > 0.5 is left physical hand)
+                    if (landmarks[0].x > 0.5) {
+                        targetP1Y = mappedY; // Control Left Paddle
+                    } else {
+                        targetP2Y = mappedY; // Control Right Paddle
+                    }
+                }
+            }
+            debugCtx.restore();
+        }
+
+        const hands = new Hands({locateFile: (file) => {
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+        }});
+        hands.setOptions({
+            maxNumHands: 2,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
         });
+        hands.onResults(onResults);
+
+        const camera = new Camera(videoElement, {
+            onFrame: async () => {
+                await hands.send({image: videoElement});
+            },
+            width: 240,
+            height: 180
+        });
+        camera.start();
+
+        // --- 5. DRAGGABLE CAMERA WINDOW (Desktop & Mobile) ---
+        const camContainer = document.getElementById('cameraContainer');
+        let isDragging = false, dragStartX = 0, dragStartY = 0, initialLeft = 0, initialTop = 0;
+
+        function onDragStart(e) {
+            isDragging = true;
+            let event = e.type.includes('touch') ? e.touches[0] : e;
+            dragStartX = event.clientX;
+            dragStartY = event.clientY;
+            initialLeft = camContainer.offsetLeft;
+            initialTop = camContainer.offsetTop;
+        }
+
+        function onDragMove(e) {
+            if (!isDragging) return;
+            e.preventDefault(); // Prevent scrolling on touch devices
+            
+            let event = e.type.includes('touch') ? e.touches[0] : e;
+            let dx = event.clientX - dragStartX;
+            let dy = event.clientY - dragStartY;
+            
+            camContainer.style.left = (initialLeft + dx) + 'px';
+            camContainer.style.top = (initialTop + dy) + 'px';
+            camContainer.style.right = 'auto'; // Disable CSS right property so 'left' takes priority
+        }
+
+        function onDragEnd() {
+            isDragging = false;
+        }
+
+        camContainer.addEventListener('mousedown', onDragStart);
+        document.addEventListener('mousemove', onDragMove);
+        document.addEventListener('mouseup', onDragEnd);
+
+        camContainer.addEventListener('touchstart', onDragStart, { passive: false });
+        document.addEventListener('touchmove', onDragMove, { passive: false });
+        document.addEventListener('touchend', onDragEnd);
 
     </script>
 </body>
