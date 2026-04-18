@@ -3,147 +3,67 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MediaPipe Tiger Avatar</title>
+    <title>Tiger Avatar - Dual Instance</title>
     
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic/holistic.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
 
     <style>
-        :root {
-            --bg-color: #1a1a2e;
-        }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        body {
-            background-color: var(--bg-color);
-            overflow: hidden;
-            font-family: system-ui, -apple-system, sans-serif;
-            touch-action: none;
-        }
+        :root { --bg-color: #1a1a2e; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background-color: var(--bg-color); overflow: hidden; font-family: system-ui, sans-serif; touch-action: none; }
 
         /* Main Scene */
         #scene {
-            position: absolute;
-            top: 0; left: 0;
-            width: 100vw; height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 1;
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+            display: flex; align-items: center; justify-content: center; z-index: 1;
         }
-
-        svg {
-            width: 100%;
-            height: 100%;
-            max-width: 1200px;
-            filter: drop-shadow(0 20px 30px rgba(0,0,0,0.4));
-        }
+        svg { width: 100%; height: 100%; max-width: 1200px; filter: drop-shadow(0 20px 30px rgba(0,0,0,0.4)); }
 
         /* Draggable PIP Window */
         #pip-window {
-            position: fixed;
-            bottom: 20px; right: 20px;
-            width: 180px; height: 240px;
-            background: #000;
-            border-radius: 16px;
-            overflow: hidden;
+            position: fixed; bottom: 20px; right: 20px; width: 180px; height: 240px;
+            background: #000; border-radius: 16px; overflow: hidden;
             box-shadow: 0 10px 40px rgba(0,0,0,0.6), 0 0 0 2px rgba(255,255,255,0.1);
-            z-index: 100;
-            cursor: grab;
-            display: flex;
-            flex-direction: column;
+            z-index: 100; cursor: grab; display: flex; flex-direction: column;
         }
-        
         #pip-window:active { cursor: grabbing; }
-
-        @media (min-width: 768px) {
-            #pip-window {
-                width: 240px; height: 180px;
-            }
-        }
+        @media (min-width: 768px) { #pip-window { width: 240px; height: 180px; } }
 
         .drag-handle {
-            height: 24px;
-            background: rgba(40, 40, 40, 0.9);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #888;
-            font-size: 10px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            user-select: none;
-            pointer-events: none; /* Let parent handle drag */
+            height: 24px; background: rgba(40, 40, 40, 0.9); display: flex;
+            align-items: center; justify-content: center; color: #888;
+            font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
+            user-select: none; pointer-events: none;
         }
+        .drag-handle::before { content: ""; width: 30px; height: 4px; background: #666; border-radius: 2px; }
+        #pip-video-container { position: relative; flex: 1; background: #111; }
 
-        .drag-handle::before {
-            content: ""; width: 30px; height: 4px;
-            background: #666; border-radius: 2px;
-        }
-
-        #pip-video-container {
-            position: relative;
-            flex: 1;
-            background: #111;
-        }
-
-        /* Video and Canvas overlay mirroring */
         .mirrored { transform: scaleX(-1); }
-        
-        video {
-            position: absolute;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-            object-fit: cover;
-        }
-
-        canvas {
-            position: absolute;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-            object-fit: cover;
-            pointer-events: none;
-        }
+        video { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; } /* Hide raw video */
+        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
 
         /* Loading Overlay */
         #loading {
-            position: fixed;
-            top: 0; left: 0; width: 100vw; height: 100vh;
-            background: var(--bg-color);
-            color: #fff;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-            transition: opacity 0.5s ease;
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: var(--bg-color); color: #fff; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; z-index: 1000; transition: opacity 0.5s ease;
         }
-        
         .spinner {
-            width: 40px; height: 40px;
-            border: 4px solid rgba(255, 140, 0, 0.3);
-            border-top: 4px solid #FF8C00;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-bottom: 20px;
+            width: 40px; height: 40px; border: 4px solid rgba(255, 140, 0, 0.3);
+            border-top: 4px solid #FF8C00; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 20px;
         }
-
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-
     </style>
 </head>
 <body>
 
     <div id="loading">
         <div class="spinner"></div>
-        <h2 style="font-weight: 500;">Loading Tiger Avatar...</h2>
-        <p style="color: #aaa; margin-top: 8px; font-size: 14px;">Please allow camera access.</p>
+        <h2 style="font-weight: 500;">Booting AI Models...</h2>
+        <p style="color: #aaa; margin-top: 8px; font-size: 14px;">Initializing Face & Hand tracking.</p>
     </div>
 
     <div id="scene">
@@ -191,7 +111,7 @@
                 </g>
             </g>
 
-            <g id="head">
+            <g id="head" transform="translate(0, -20)">
                 <g id="ears">
                     <path d="M-160,-120 C-250,-250 -100,-280 -80,-180 Z" fill="#E67E22" />
                     <path d="M-150,-140 C-210,-220 -110,-240 -100,-170 Z" fill="#fff" />
@@ -209,17 +129,17 @@
                 <path d="M0,-180 L-20,-110 L20,-110 Z" fill="#111" />
                 <path d="M-60,-170 L-50,-100 L-30,-120 Z" fill="#111" />
                 <path d="M60,-170 L50,-100 L30,-120 Z" fill="#111" />
-                
                 <path d="M-200,-50 L-130,-40 L-200,-20 Z" fill="#111" />
                 <path d="M200,-50 L130,-40 L200,-20 Z" fill="#111" />
-                
                 <path d="M-195,20 L-120,40 L-190,60 Z" fill="#111" />
                 <path d="M195,20 L120,40 L190,60 Z" fill="#111" />
 
                 <ellipse cx="0" cy="80" rx="110" ry="80" fill="#FFF" />
-
                 <path d="M-40,60 C-40,40 40,40 40,60 L0,100 Z" fill="#F1948A" />
-                <path d="M0,100 L0,130 M-40,110 Q0,150 40,110" stroke="#111" stroke-width="6" fill="none" stroke-linecap="round"/>
+                
+                <path d="M0,100 L0,110" stroke="#111" stroke-width="6" stroke-linecap="round" fill="none"/>
+                <path id="mouth-hole" d="M-40,110 Q0,130 40,110 Q0,130 -40,110 Z" fill="#5A1A1A" />
+                <path id="mouth-lip" d="M-40,110 Q0,130 40,110" stroke="#111" stroke-width="6" fill="none" stroke-linecap="round"/>
 
                 <path d="M-60,90 L-180,70 M-70,110 L-190,110 M-60,130 L-170,150" stroke="#111" stroke-width="4" stroke-linecap="round" fill="none"/>
                 <path d="M60,90 L180,70 M70,110 L190,110 M60,130 L170,150" stroke="#111" stroke-width="4" stroke-linecap="round" fill="none"/>
@@ -243,37 +163,39 @@
     <div id="pip-window">
         <div class="drag-handle"></div>
         <div id="pip-video-container">
-            <video id="input-video" class="mirrored" autoplay playsinline muted></video>
+            <video id="input-video" playsinline muted></video>
             <canvas id="output-canvas" class="mirrored"></canvas>
         </div>
     </div>
 
     <script>
-        // --- 1. SVG Avatar Logic & Lerp Smoothing ---
-        const headEl = document.getElementById('head');
+        // --- 1. State & Lerp ---
         const pawLEl = document.getElementById('paw-l'); 
         const pawREl = document.getElementById('paw-r'); 
+        const mouthHoleEl = document.getElementById('mouth-hole');
+        const mouthLipEl = document.getElementById('mouth-lip');
 
         const lerp = (start, end, amt) => (1 - amt) * start + amt * end;
 
         const state = {
-            head: { x: 0, y: 0, angle: 0, targetX: 0, targetY: 0, targetAngle: 0 },
+            mouthOpen: 0, targetMouthOpen: 0,
             pawL: { x: -300, y: 300, angle: 0, targetX: -300, targetY: 300, targetAngle: 0, visible: true },
             pawR: { x: 300, y: 300, angle: 0, targetX: 300, targetY: 300, targetAngle: 0, visible: true }
         };
 
-        const lerpAmt = 0.2; 
+        const lerpAmt = 0.25; 
 
         function animateSVG() {
-            // Lerp Head
-            state.head.x = lerp(state.head.x, state.head.targetX, lerpAmt);
-            state.head.y = lerp(state.head.y, state.head.targetY, lerpAmt);
-            state.head.angle = lerp(state.head.angle, state.head.targetAngle, lerpAmt);
+            // Animate Mouth
+            state.mouthOpen = lerp(state.mouthOpen, state.targetMouthOpen, 0.4); // Faster lerp for snappy mouth
+            const baseDip = 130;
+            const bottomDip = baseDip + state.mouthOpen;
             
-            // FIX: Removed the massive "- 100" Y offset so the head overlaps the neck properly
-            headEl.setAttribute('transform', `translate(${state.head.x}, ${state.head.y - 20}) rotate(${state.head.angle})`);
+            // Draw upper curve, then draw lower curve back to start
+            mouthHoleEl.setAttribute('d', `M-40,110 Q0,${baseDip} 40,110 Q0,${bottomDip} -40,110 Z`);
+            mouthLipEl.setAttribute('d', `M-40,110 Q0,${bottomDip} 40,110`);
 
-            // Lerp Paws
+            // Animate Paws
             ['pawL', 'pawR'].forEach(paw => {
                 const p = state[paw];
                 p.x = lerp(p.x, p.targetX, lerpAmt);
@@ -288,154 +210,171 @@
         }
         animateSVG(); 
 
-        // --- 2. MediaPipe Holistic Integration ---
+        // --- 2. Decoupled MediaPipe Logic ---
         const videoElement = document.getElementById('input-video');
         const canvasElement = document.getElementById('output-canvas');
         const canvasCtx = canvasElement.getContext('2d');
         const loadingScreen = document.getElementById('loading');
 
-        let isInitialized = false;
+        // Central store for latest tracking data to render independently
+        let trackingData = { face: null, hands: null, videoFrame: null };
+        let modelsLoaded = { face: false, hands: false };
 
-        function onResults(results) {
-            if (!isInitialized) {
+        function checkInit() {
+            if (modelsLoaded.face && modelsLoaded.hands) {
                 loadingScreen.style.opacity = '0';
                 setTimeout(() => loadingScreen.style.display = 'none', 500);
-                isInitialized = true;
             }
-
-            canvasElement.width = videoElement.videoWidth;
-            canvasElement.height = videoElement.videoHeight;
-            canvasCtx.save();
-            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-
-            // Draw Face
-            if (results.faceLandmarks) {
-                drawConnectors(canvasCtx, results.faceLandmarks, FACEMESH_TESSELATION, {color: '#C0C0C070', lineWidth: 1});
-                
-                const nose = results.faceLandmarks[1];
-                const leftEye = results.faceLandmarks[33];
-                const rightEye = results.faceLandmarks[263];
-
-                // FIX: Drastically reduced the multiplier to constrain translation to the neck area
-                state.head.targetX = (0.5 - nose.x) * 150; 
-                state.head.targetY = (nose.y - 0.5) * 150;
-
-                // FIX: Corrected the dx/dy calculation for mirrored camera
-                const dx = leftEye.x - rightEye.x; 
-                const dy = rightEye.y - leftEye.y;
-                state.head.targetAngle = Math.atan2(dy, dx) * (180 / Math.PI);
-            }
-
-            // Draw & Map Right Hand
-            if (results.rightHandLandmarks) {
-                drawConnectors(canvasCtx, results.rightHandLandmarks, HAND_CONNECTIONS, {color: '#00FF00', lineWidth: 2});
-                drawLandmarks(canvasCtx, results.rightHandLandmarks, {color: '#FF0000', lineWidth: 1, radius: 2});
-                
-                const wrist = results.rightHandLandmarks[0];
-                const middleFinger = results.rightHandLandmarks[9];
-
-                state.pawL.visible = true;
-                state.pawL.targetX = (0.5 - wrist.x) * 1400 - 250; 
-                state.pawL.targetY = (wrist.y - 0.5) * 1200 + 200; 
-                
-                const dx = (0.5 - middleFinger.x) - (0.5 - wrist.x);
-                const dy = middleFinger.y - wrist.y;
-                state.pawL.targetAngle = (Math.atan2(dy, dx) * (180 / Math.PI)) + 90; 
-            } else {
-                state.pawL.visible = false;
-                state.pawL.targetY = 400; 
-            }
-
-            // Draw & Map Left Hand
-            if (results.leftHandLandmarks) {
-                drawConnectors(canvasCtx, results.leftHandLandmarks, HAND_CONNECTIONS, {color: '#00FF00', lineWidth: 2});
-                drawLandmarks(canvasCtx, results.leftHandLandmarks, {color: '#FF0000', lineWidth: 1, radius: 2});
-                
-                const wrist = results.leftHandLandmarks[0];
-                const middleFinger = results.leftHandLandmarks[9];
-
-                state.pawR.visible = true;
-                state.pawR.targetX = (0.5 - wrist.x) * 1400 + 250; 
-                state.pawR.targetY = (wrist.y - 0.5) * 1200 + 200; 
-                
-                const dx = (0.5 - middleFinger.x) - (0.5 - wrist.x);
-                const dy = middleFinger.y - wrist.y;
-                state.pawR.targetAngle = (Math.atan2(dy, dx) * (180 / Math.PI)) + 90;
-            } else {
-                state.pawR.visible = false;
-                state.pawR.targetY = 400;
-            }
-
-            canvasCtx.restore();
         }
 
-        const holistic = new Holistic({locateFile: (file) => {
-            return `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}`;
-        }});
+        // FaceMesh Callback
+        function onFaceResults(results) {
+            if (!modelsLoaded.face) { modelsLoaded.face = true; checkInit(); }
+            trackingData.face = results.multiFaceLandmarks ? results.multiFaceLandmarks[0] : null;
 
-        holistic.setOptions({
-            modelComplexity: 1,
-            smoothLandmarks: true,
-            enableSegmentation: false,
-            smoothSegmentation: false,
-            refineFaceLandmarks: true,
-            minDetectionConfidence: 0.5,
-            minTrackingConfidence: 0.5
-        });
+            if (trackingData.face) {
+                // Calculate mouth openness
+                const topLip = trackingData.face[13];
+                const bottomLip = trackingData.face[14];
+                const topHead = trackingData.face[10];
+                const chin = trackingData.face[152];
+                
+                const lipDist = Math.abs(bottomLip.y - topLip.y);
+                const faceHeight = Math.abs(chin.y - topHead.y);
+                const ratio = lipDist / faceHeight;
+                
+                // Map the ratio to pixels for the SVG curve (e.g. up to 80px drop)
+                const openAmount = Math.max(0, (ratio - 0.015) * 800); 
+                state.targetMouthOpen = Math.min(80, openAmount);
+            } else {
+                state.targetMouthOpen = 0;
+            }
+        }
 
-        holistic.onResults(onResults);
+        // Hands Callback
+        function onHandResults(results) {
+            if (!modelsLoaded.hands) { modelsLoaded.hands = true; checkInit(); }
+            trackingData.hands = results;
+
+            let foundLeft = false;
+            let foundRight = false;
+
+            if (results.multiHandLandmarks && results.multiHandedness) {
+                results.multiHandLandmarks.forEach((landmarks, index) => {
+                    const classification = results.multiHandedness[index].label; 
+                    // MediaPipe returns physical handedness. 
+                    // To control Left Screen Paw, we use physical Right hand (which appears on the left due to mirroring)
+                    const isRightHand = classification === 'Right';
+                    
+                    const wrist = landmarks[0];
+                    const middleFinger = landmarks[9];
+                    
+                    if (isRightHand) {
+                        foundLeft = true; // Maps to Screen Left Paw
+                        state.pawL.visible = true;
+                        state.pawL.targetX = (0.5 - wrist.x) * 1400 - 250; 
+                        state.pawL.targetY = (wrist.y - 0.5) * 1200 + 200; 
+                        const dx = (0.5 - middleFinger.x) - (0.5 - wrist.x);
+                        const dy = middleFinger.y - wrist.y;
+                        state.pawL.targetAngle = (Math.atan2(dy, dx) * (180 / Math.PI)) + 90;
+                    } else {
+                        foundRight = true; // Maps to Screen Right Paw
+                        state.pawR.visible = true;
+                        state.pawR.targetX = (0.5 - wrist.x) * 1400 + 250; 
+                        state.pawR.targetY = (wrist.y - 0.5) * 1200 + 200; 
+                        const dx = (0.5 - middleFinger.x) - (0.5 - wrist.x);
+                        const dy = middleFinger.y - wrist.y;
+                        state.pawR.targetAngle = (Math.atan2(dy, dx) * (180 / Math.PI)) + 90;
+                    }
+                });
+            }
+
+            if (!foundLeft) { state.pawL.visible = false; state.pawL.targetY = 400; }
+            if (!foundRight) { state.pawR.visible = false; state.pawR.targetY = 400; }
+        }
+
+        // Decoupled Render Loop for the PIP Canvas
+        function renderCanvas() {
+            if (videoElement.readyState >= 2) {
+                canvasElement.width = videoElement.videoWidth;
+                canvasElement.height = videoElement.videoHeight;
+                canvasCtx.save();
+                
+                // Draw Video (Mirrored via CSS, but we draw it normal here, CSS handles the flip)
+                canvasCtx.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
+
+                // Draw Face Mesh
+                if (trackingData.face) {
+                    drawConnectors(canvasCtx, trackingData.face, FACEMESH_TESSELATION, {color: '#C0C0C040', lineWidth: 1});
+                    // Highlight mouth
+                    drawConnectors(canvasCtx, trackingData.face, FACEMESH_LIPS, {color: '#FF0000', lineWidth: 2});
+                }
+
+                // Draw Hands
+                if (trackingData.hands && trackingData.hands.multiHandLandmarks) {
+                    for (const landmarks of trackingData.hands.multiHandLandmarks) {
+                        drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, {color: '#00FF00', lineWidth: 2});
+                        drawLandmarks(canvasCtx, landmarks, {color: '#FF0000', lineWidth: 1, radius: 2});
+                    }
+                }
+                
+                canvasCtx.restore();
+            }
+            requestAnimationFrame(renderCanvas);
+        }
+        renderCanvas();
+
+        // --- 3. Initialize MediaPipe Instances ---
+        const faceMesh = new FaceMesh({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`});
+        faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+        faceMesh.onResults(onFaceResults);
+
+        const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+        hands.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+        hands.onResults(onHandResults);
 
         const camera = new Camera(videoElement, {
             onFrame: async () => {
-                await holistic.send({image: videoElement});
+                // Send frame to both instances simultaneously
+                await Promise.all([
+                    faceMesh.send({image: videoElement}),
+                    hands.send({image: videoElement})
+                ]);
             },
-            width: 480,
-            height: 360,
-            facingMode: 'user'
+            width: 480, height: 360, facingMode: 'user'
         });
         camera.start();
 
-        // --- 3. Draggable PIP Window Logic ---
+        // --- 4. Draggable PIP Window Logic ---
         const pip = document.getElementById('pip-window');
         let isDragging = false;
         let startX, startY, initialLeft, initialTop;
 
         pip.addEventListener('pointerdown', (e) => {
             isDragging = true;
-            startX = e.clientX;
-            startY = e.clientY;
-            
+            startX = e.clientX; startY = e.clientY;
             const rect = pip.getBoundingClientRect();
-            initialLeft = rect.left;
-            initialTop = rect.top;
+            initialLeft = rect.left; initialTop = rect.top;
 
             pip.setPointerCapture(e.pointerId);
-            pip.style.bottom = 'auto';
-            pip.style.right = 'auto';
-            pip.style.left = `${initialLeft}px`;
-            pip.style.top = `${initialTop}px`;
+            pip.style.bottom = 'auto'; pip.style.right = 'auto';
+            pip.style.left = `${initialLeft}px`; pip.style.top = `${initialTop}px`;
             pip.style.transition = 'none';
         });
 
         pip.addEventListener('pointermove', (e) => {
             if (!isDragging) return;
             e.preventDefault(); 
-
-            const dx = e.clientX - startX;
-            const dy = e.clientY - startY;
-
+            const dx = e.clientX - startX; const dy = e.clientY - startY;
             const newLeft = Math.max(0, Math.min(window.innerWidth - pip.offsetWidth, initialLeft + dx));
             const newTop = Math.max(0, Math.min(window.innerHeight - pip.offsetHeight, initialTop + dy));
-
-            pip.style.left = `${newLeft}px`;
-            pip.style.top = `${newTop}px`;
+            pip.style.left = `${newLeft}px`; pip.style.top = `${newTop}px`;
         });
 
         pip.addEventListener('pointerup', (e) => {
             isDragging = false;
             pip.releasePointerCapture(e.pointerId);
         });
-
     </script>
 </body>
 </html>
