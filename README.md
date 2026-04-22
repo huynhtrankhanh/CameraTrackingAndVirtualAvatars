@@ -15,31 +15,31 @@ The demos speak volumes. In fact, they are more powerful than all the words that
 ## Related Work
 The field of real-time camera tracking and virtual avatar animation has seen significant growth, driven by advancements in machine learning and computer vision. Our work builds upon several key frameworks and methodologies that have defined the current landscape of browser-based motion capture.
 ### 1. MediaPipe Framework
-**MediaPipe**, developed by Google, serves as the primary backbone for many modern tracking applications. It offers a suite of cross-platform, customizable ML solutions for live and streaming media.
- * **Hand Tracking:** MediaPipe Hands utilizes an efficient pipeline that provides 21 3D hand landmarks from a single frame. This is crucial for applications requiring high-precision gesture recognition.
- * **Face Mesh:** For facial avatars, MediaPipe Face Mesh estimates 468 3D face landmarks in real-time, allowing for detailed mapping of expressions and lip-syncing without the need for depth sensors.
- * **Holistic Tracking:** The MediaPipe Holistic pipeline integrates components for a combined hand, face, and pose perception, which is essential for full-body virtual representation.
+**MediaPipe** [1], developed by Google, serves as the primary backbone for many modern tracking applications. It offers a suite of cross-platform, customizable ML solutions for live and streaming media.
+ * **Hand Tracking:** MediaPipe Hands [2] utilizes an efficient pipeline that provides 21 3D hand landmarks from a single frame. This is crucial for applications requiring high-precision gesture recognition.
+ * **Face Mesh:** For facial avatars, MediaPipe Face Mesh [3] estimates 468 3D face landmarks in real-time, allowing for detailed mapping of expressions and lip-syncing without the need for depth sensors.
+ * **Holistic Tracking:** The MediaPipe Holistic pipeline [4] integrates components for a combined hand, face, and pose perception, which is essential for full-body virtual representation.
 ### 2. OpenCV and Classical Computer Vision
-Before the ubiquity of pre-trained ML models, **OpenCV** (Open Source Computer Vision Library) was the standard for tracking.
- * **Haar Cascades:** Traditionally used for face detection, though limited in capturing the nuance of expressions compared to deep learning models.
- * **Optical Flow:** Techniques like Lucas-Kanade are often used in conjunction with landmark detectors to smooth jitter and track movement between frames.
+Before the ubiquity of pre-trained ML models, **OpenCV** (Open Source Computer Vision Library) [5] was the standard for tracking.
+ * **Haar Cascades:** Traditionally used for face detection [6], though limited in capturing the nuance of expressions compared to deep learning models.
+ * **Optical Flow:** Techniques like Lucas-Kanade [7] are often used in conjunction with landmark detectors to smooth jitter and track movement between frames.
  * **Integration:** Many modern applications still use OpenCV for image preprocessing, such as grayscale conversion, denoising, and coordinate transformations, before passing frames to a neural network.
 ### 3. Deep Learning-Based Pose Estimation
 Beyond MediaPipe, several academic and industry models have pushed the boundaries of accuracy:
- * **OpenPose:** One of the first multi-person 2D real-time keypoint detection systems. While highly accurate, it often requires significant GPU resources, making it less ideal for lightweight web applications.
- * **DensePose:** Developed by Facebook AI Research (FAIR), this moves beyond landmarks by mapping all human pixels of an RGB image to a 3D surface of the human body, providing a much richer "skin" for virtual avatars.
+ * **OpenPose:** One of the first multi-person 2D real-time keypoint detection systems [8]. While highly accurate, it often requires significant GPU resources, making it less ideal for lightweight web applications.
+ * **DensePose:** Developed by Facebook AI Research (FAIR), this moves beyond landmarks by mapping all human pixels of an RGB image to a 3D surface of the human body [9], providing a much richer "skin" for virtual avatars.
 ### 4. Web-Based Rendering and Animation
 Tracking is only half of the challenge; the other half is mapping that data to a 3D model.
- * **Three.js & Babylon.js:** These libraries are the industry standards for rendering 3D content in the browser. They allow developers to take tracking coordinates and apply them to rigged 3D models via **Inverse Kinematics (IK)** or direct bone rotation.
- * **Kalidokit:** A specialized library often used alongside MediaPipe to translate raw landmark data into natural-looking rotations for 3D avatars (VRM models), handling the complex math required for "human-like" movement.
+ * **Three.js & Babylon.js:** These libraries [10][11] are the industry standards for rendering 3D content in the browser. They allow developers to take tracking coordinates and apply them to rigged 3D models via **Inverse Kinematics (IK)** [12] or direct bone rotation.
+ * **Kalidokit:** A specialized library [13] often used alongside MediaPipe to translate raw landmark data into natural-looking rotations for 3D avatars (VRM models), handling the complex math required for "human-like" movement.
 ### 5. ARCore and ARKit
-While our application focuses on browser-based accessibility, mobile-native frameworks like **Apple’s ARKit** and **Google’s ARCore** have set the benchmark for high-fidelity tracking. ARKit, in particular, uses the TrueDepth camera system to provide **BlendShape Coefficients**, which allow for extremely responsive facial "puppeteering"—a standard our application strives to emulate using standard RGB webcams.
+While our application focuses on browser-based accessibility, mobile-native frameworks like **Apple’s ARKit** [14] and **Google’s ARCore** [15] have set the benchmark for high-fidelity tracking. ARKit, in particular, uses the TrueDepth camera system to provide **BlendShape Coefficients** [16], which allow for extremely responsive facial "puppeteering"—a standard our application strives to emulate using standard RGB webcams.
 
 ## Methodology
 For ease of use, all demos are in the form of self-contained HTML files. They can be hosted on any static web server or run locally.
 
 The demos all use the MediaPipe framework. The general flow is as follows:
-* Acquire access to the webcam via the HTML5 `getUserMedia` API.
+* Acquire access to the webcam via the HTML5 `getUserMedia` API [17].
 * Initialize MediaPipe to track body parts by passing the live video stream into the detection models (Hands, FaceMesh, or Tasks Vision).
 * Draw tracking lines and dots on an overlay window (often a draggable Picture-in-Picture window rendered on a `<canvas>`) to signal to the user that tracking is taking place.
 * Based on the tracking data, we then do something—specifically, calculating relative distances and angles to trigger CSS/SVG transformations or WebGL coordinate mapping.
@@ -51,12 +51,12 @@ For these three demos, an SVG is controlled by the tracking data.
 * Bear
   * Five body parts of the bear are controlled by the five fingers on a hand. The code, through the tracking data and an algorithm, determines whether a finger is folded or not. When a finger is extended, a body part moves one way. And when a finger is folded, a body part moves the other way. Because human thumbs are opposable, the algorithm for checking whether the thumb is folded or not is slightly different.
   * The algorithm determines a non-thumb finger is folded by measuring the Euclidean distance between the wrist and the fingertip and comparing it to the distance between the wrist and the Proximal Interphalangeal (PIP) joint. If the wrist-to-tip distance is shorter, the finger is classified as folded. For the thumb, it checks if the thumb tip is closer to the base of the pinky than the index finger's base is to the pinky's base (indicating it is folded inward across the palm).
-  * The SVG is drawn as follows: It is composed of multiple independent `<g>` (group) tags representing the limbs and head (e.g., `bear-arm-r`, `bear-leg-l`). Each group has an established anchor point. A `requestAnimationFrame` loop calculates the target rotation angles based on the folding booleans and updates the DOM elements.
+  * The SVG is drawn as follows: It is composed of multiple independent `<g>` (group) tags representing the limbs and head (e.g., `bear-arm-r`, `bear-leg-l`). Each group has an established anchor point. A `requestAnimationFrame` loop [18] calculates the target rotation angles based on the folding booleans and updates the DOM elements.
 * Frog
   * The user's face is tracked. Then, the eyelids of the frog close or open depending on the eyelids of the user. The same goes for the mouth.
   * The algorithm for determining the extent of opening an eyelid is as follows: The distance between the upper and lower eyelid landmarks is extracted (e.g., landmarks 159 and 145 for the left eye). This distance is normalized against the total bounding height of the face to ensure distance-agnostic tracking. The normalized value is then scaled and clamped between an upper limit of 1 (fully open) and a lower limit of 0 (fully closed).
   * The algorithm for determining the extent of opening the mouth is as follows: Similar to the eyes, it computes the absolute vertical gap between the inner upper lip and inner lower lip landmarks (landmarks 13 and 14). It divides this by the face height, subtracts a base resting threshold to account for neutral lips, and scales the ratio to a 0-to-1 range.
-  * The algorithm for animation interpolation is as follows: A Linear Interpolation (LERP) strategy is paired with a low-pass smoothing factor. On every frame, the current animated state is updated using the formula: `currentValue += (targetValue - currentValue) * smoothFactor`. This removes the high-frequency jitter associated with raw camera landmark detection, ensuring the SVG elements glide organically.
+  * The algorithm for animation interpolation is as follows: A Linear Interpolation (LERP) strategy [19] is paired with a low-pass smoothing factor. On every frame, the current animated state is updated using the formula: `currentValue += (targetValue - currentValue) * smoothFactor`. This removes the high-frequency jitter associated with raw camera landmark detection, ensuring the SVG elements glide organically.
 * Tiger
   * Both the hands and the face are tracked. MediaPipe efficiently processes simultaneous landmarks. Hand proximity and finger gestures are used to manipulate the tiger's paws (e.g., moving SVG paw groups based on wrist coordinates mapped to the viewport), while facial landmarks dictate the rotation and scaling of the tiger's head to mimic the user peering around in 3D space.
 
@@ -74,3 +74,24 @@ The algorithm to move the paddle based on the hand folding score is as follows: 
 
 ## Conclusion
 The five demos together show that body part tracking is a practical technology that can run on diverse devices such as mobile phones and laptops. Body part tracking is reliable and can be used to create engaging experiences such as virtual avatars and games. From our experience, people are intrigued by the ability of our software to track body movements and animate characters on the screen, to the degree where they feel the characters on the screen are a part of their body during the duration of the demo.
+
+## Citations
+[1] MediaPipe, Google AI Edge docs: https://ai.google.dev/edge/mediapipe/solutions/guide  
+[2] MediaPipe Hands: https://ai.google.dev/edge/mediapipe/solutions/hands  
+[3] MediaPipe Face Mesh: https://ai.google.dev/edge/mediapipe/solutions/face_mesh  
+[4] MediaPipe Holistic: https://ai.google.dev/edge/mediapipe/solutions/holistic  
+[5] OpenCV: https://opencv.org/  
+[6] Viola, P., & Jones, M. (2001), Rapid Object Detection using a Boosted Cascade of Simple Features: https://www.cs.cmu.edu/~efros/courses/LBMV07/Papers/viola-cvpr-01.pdf  
+[7] Lucas, B. D., & Kanade, T. (1981), An Iterative Image Registration Technique with an Application to Stereo Vision: https://idl.uw.edu/living-papers-paper/lucas-kanade/  
+[8] Cao, Z., Hidalgo, G., Simon, T., Wei, S.-E., & Sheikh, Y. (2018), OpenPose: Realtime Multi-Person 2D Pose Estimation using Part Affinity Fields: https://arxiv.org/abs/1812.08008  
+[9] Güler, R. A., Neverova, N., & Kokkinos, I. (2018), DensePose: Dense Human Pose Estimation in the Wild: https://arxiv.org/abs/1802.00434  
+[10] Three.js: https://threejs.org/  
+[11] Babylon.js: https://www.babylonjs.com/  
+[12] Inverse kinematics (overview): https://en.wikipedia.org/wiki/Inverse_kinematics  
+[13] Kalidokit: https://github.com/yeemachine/kalidokit  
+[14] Apple ARKit: https://developer.apple.com/augmented-reality/arkit/  
+[15] Google ARCore: https://developers.google.com/ar  
+[16] ARFaceAnchor.BlendShapeLocation (Apple Developer Documentation): https://developer.apple.com/documentation/arkit/arfaceanchor/blendshapelocation  
+[17] MediaDevices.getUserMedia() (MDN): https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia  
+[18] window.requestAnimationFrame() (MDN): https://developer.mozilla.org/en-US/docs/Web/API/Window/requestAnimationFrame  
+[19] Linear interpolation (LERP): https://en.wikipedia.org/wiki/Linear_interpolation  
