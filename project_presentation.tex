@@ -1,0 +1,108 @@
+\documentclass[aspectratio=169]{beamer}
+\usetheme{Madrid}
+\usecolortheme{seahorse}
+
+\title{Camera Tracking and Virtual Avatars}
+\author{Project Overview}
+\date{\today}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+\end{frame}
+
+\begin{frame}{Project Summary}
+  \begin{itemize}
+    \item Browser-based, real-time camera tracking demos for interactive avatars and gameplay.
+    \item Five self-contained HTML demos: \textbf{Bear}, \textbf{Frog}, \textbf{Tiger}, \textbf{Hand}, and \textbf{Ping}.
+    \item Focus on accessibility: no installation required for online usage.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Core Technology Stack}
+  \begin{itemize}
+    \item \textbf{MediaPipe} for hand and face landmark detection.
+    \item \textbf{HTML5 getUserMedia} for webcam stream acquisition.
+    \item \textbf{Canvas \& SVG} for 2D overlays and avatar animation.
+    \item \textbf{Three.js} for 3D rendering in the Hand demo.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Shared Processing Pipeline}
+  \begin{enumerate}
+    \item Capture camera frames from browser webcam API.
+    \item Detect landmarks using MediaPipe models.
+    \item Derive high-level features (finger fold, eye/mouth openness, hand openness).
+    \item Map features to avatar/game controls with smoothing (LERP).
+    \item Render visual feedback in SVG, Canvas, or WebGL.
+  \end{enumerate}
+\end{frame}
+
+\begin{frame}{Demo 1: Bear}
+  \begin{itemize}
+    \item Tracks one hand to animate five bear body parts.
+    \item Finger fold detection compares wrist-to-tip distance against wrist-to-joint distance.
+    \item Thumb fold uses a dedicated opposable-thumb heuristic.
+    \item Animated via per-part SVG group transformations in an animation loop.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Demo 2: Frog}
+  \begin{itemize}
+    \item Face landmarks drive frog eyelids and mouth.
+    \item Eye and mouth openness are normalized against face scale for robustness.
+    \item Temporal smoothing with LERP reduces jitter and improves visual stability.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Demo 3: Tiger}
+  \begin{itemize}
+    \item Combines face and two-hand tracking in one scene.
+    \item Hand positions and angles drive paw transforms.
+    \item Face blendshapes and landmarks drive mouth/head expressions.
+    \item Uses a draggable picture-in-picture tracking viewport.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Demo 4: Hand}
+  \begin{itemize}
+    \item Renders a stylized 3D hand skeleton and mesh in Three.js.
+    \item MediaPipe 3D hand landmarks are mapped into scene coordinates.
+    \item Animal-emoji stickers are attached to finger tips with orientation updates.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Demo 5: Ping}
+  \begin{itemize}
+    \item Two-player ping pong controlled by left and right hands.
+    \item Hand openness score is computed from fingertip-to-wrist aggregate distance.
+    \item Score is mapped to paddle Y position with smoothing for stable gameplay.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Outcome and Future Work}
+  \begin{itemize}
+    \item Demonstrates practical real-time body tracking on common devices.
+    \item Delivers engaging, low-friction avatar and game interactions in-browser.
+    \item Future directions:
+    \begin{itemize}
+      \item More robust multi-user tracking.
+      \item Improved temporal filtering and latency optimization.
+      \item Expanded avatar rigging and richer interaction design.
+    \end{itemize}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Repository Demo Links}
+  \small
+  \begin{itemize}
+    \item Bear: \texttt{bear.html}
+    \item Frog: \texttt{frog.html}
+    \item Hand: \texttt{hand.html}
+    \item Tiger: \texttt{tiger.html}
+    \item Ping: \texttt{ping.html}
+  \end{itemize}
+\end{frame}
+
+\end{document}
