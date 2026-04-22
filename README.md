@@ -77,9 +77,9 @@ The five demos together show that body part tracking is a practical technology t
 
 ## Citations
 [1] MediaPipe, Google AI Edge docs: https://ai.google.dev/edge/mediapipe/solutions/guide  
-[2] MediaPipe Hands: https://chuoling.github.io/mediapipe/solutions/hands.html  
-[3] MediaPipe Face Mesh: https://chuoling.github.io/mediapipe/solutions/face_mesh.html  
-[4] MediaPipe Holistic: https://chuoling.github.io/mediapipe/solutions/holistic.html  
+[2] MediaPipe Hands: https://ai.google.dev/edge/mediapipe/solutions/hands  
+[3] MediaPipe Face Mesh: https://ai.google.dev/edge/mediapipe/solutions/face_mesh  
+[4] MediaPipe Holistic: https://ai.google.dev/edge/mediapipe/solutions/holistic  
 [5] OpenCV: https://opencv.org/  
 [6] Viola, P., & Jones, M. (2001), Rapid Object Detection using a Boosted Cascade of Simple Features: https://www.cs.cmu.edu/~efros/courses/LBMV07/Papers/viola-cvpr-01.pdf  
 [7] Lucas, B. D., & Kanade, T. (1981), An Iterative Image Registration Technique with an Application to Stereo Vision: https://idl.uw.edu/living-papers-paper/lucas-kanade/  
